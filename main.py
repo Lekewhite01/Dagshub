@@ -1,10 +1,9 @@
 import argparse
 import dagshub
 import mlflow
-from mlflow import create_experiment
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import SGDClassifier
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import roc_auc_score, average_precision_score, accuracy_score, precision_score, recall_score, \
     f1_score
 from sklearn.model_selection import train_test_split
@@ -32,6 +31,12 @@ def feature_engineering(raw_df):
     df['Text'] = df['Title'].fillna('') + ' ' + df['Body'].fillna('')
     return df
 
+def get_or_create_experiment_id(name):
+    exp = mlflow.get_experiment_by_name(name)
+    if exp is None:
+        exp_id = mlflow.create_experiment(name)
+        return exp_id
+    return exp.experiment_id
 
 def fit_tfidf(train_df, test_df):
     tfidf = TfidfVectorizer(max_features=25000)
@@ -42,7 +47,7 @@ def fit_tfidf(train_df, test_df):
 
 
 def fit_model(train_X, train_y, random_state=42):
-    clf_tfidf = SGDClassifier(loss='modified_huber', random_state=random_state)
+    clf_tfidf = RandomForestClassifier(random_state=random_state, class_weight='balanced', max_depth=50)
     clf_tfidf.fit(train_X, train_y)
     return clf_tfidf
 
@@ -80,7 +85,7 @@ def train():
     train_df = feature_engineering(train_df)
     test_df = feature_engineering(test_df)
 
-    exp_id = create_experiment("tutorial")
+    exp_id = get_or_create_experiment_id("tutorial")
 
     with mlflow.start_run(experiment_id=exp_id):
         print('Fitting TFIDF...')
