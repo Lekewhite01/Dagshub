@@ -1,4 +1,7 @@
 import argparse
+import dagshub
+import mlflow
+from mlflow import create_experiment
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import SGDClassifier
@@ -6,6 +9,10 @@ from sklearn.metrics import roc_auc_score, average_precision_score, accuracy_sco
     f1_score
 from sklearn.model_selection import train_test_split
 import joblib
+
+DAGSHUB_REPO_OWNER = "lekewhite01"
+DAGSHUB_REPO = "Dagshub"
+dagshub.init(DAGSHUB_REPO, DAGSHUB_REPO_OWNER) 
 
 # Consts
 CLASS_LABEL = 'MachineLearning'
@@ -73,27 +80,36 @@ def train():
     train_df = feature_engineering(train_df)
     test_df = feature_engineering(test_df)
 
-    print('Fitting TFIDF...')
-    train_tfidf, test_tfidf, tfidf = fit_tfidf(train_df, test_df)
+    exp_id = create_experiment("tutorial")
 
-    print('Saving TFIDF object...')
-    joblib.dump(tfidf, 'outputs/tfidf.joblib')
+    with mlflow.start_run(experiment_id=exp_id):
+        print('Fitting TFIDF...')
+        train_tfidf, test_tfidf, tfidf = fit_tfidf(train_df, test_df)
 
-    print('Training model...')
-    train_y = train_df[CLASS_LABEL]
-    model = fit_model(train_tfidf, train_y)
+        print('Saving TFIDF object...')
+        joblib.dump(tfidf, 'outputs/tfidf.joblib')
+        mlflow.log_params({'tfidf': tfidf.get_params()})
 
-    print('Saving trained model...')
-    joblib.dump(model, 'outputs/model.joblib')
+        print('Training model...')
+        train_y = train_df[CLASS_LABEL]
+        model = fit_model(train_tfidf, train_y)
 
-    print('Evaluating model...')
-    train_metrics = eval_model(model, train_tfidf, train_y)
-    print('Train metrics:')
-    print(train_metrics)
+        print('Saving trained model...')
+        joblib.dump(model, 'outputs/model.joblib')
+        mlflow.log_param("model_class", type(model).__name__)
+        mlflow.log_params({'model': model.get_params()})
 
-    test_metrics = eval_model(model, test_tfidf, test_df[CLASS_LABEL])
-    print('Test metrics:')
-    print(test_metrics)
+        print('Evaluating model...')
+        train_metrics = eval_model(model, train_tfidf, train_y)
+        print('Train metrics:')
+        print(train_metrics)
+        mlflow.log_metrics({f'train__{k}': v for k,v in train_metrics.items()})
+
+        test_metrics = eval_model(model, test_tfidf, test_df[CLASS_LABEL])
+        print('Test metrics:')
+        print(test_metrics)
+        mlflow.log_metrics({f'test__{k}': v for k,v in test_metrics.items()})
+
 
 
 if __name__ == '__main__':
